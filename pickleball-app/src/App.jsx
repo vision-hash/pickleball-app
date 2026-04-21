@@ -230,11 +230,22 @@ export default function App() {
       try {
         const r = await window.storage.get(KEY, true);
         const parsed = JSON.parse(r.value);
-        // Merge seed members with stored members (keep passwords from storage)
-        if (parsed.members && parsed.members.length > 0) setDb(parsed);
-        else setDb({members: SEED_MEMBERS, sessions:[], activeSession:null});
+        if (parsed.members && parsed.members.length > 0) {
+          setDb(parsed);
+        } else {
+          throw new Error('empty');
+        }
       } catch {
-        setDb({members: SEED_MEMBERS, sessions:[], activeSession:null});
+        // No data in Supabase yet — seed it so all devices sync
+        const initial = {members: SEED_MEMBERS, sessions:[], activeSession:null};
+        setDb(initial);
+        // Write to Supabase so other devices get it too
+        try {
+          await window.storage.set(KEY, JSON.stringify(initial), true);
+          console.log('[App] Seeded initial data to Supabase');
+        } catch(e) {
+          console.warn('[App] Could not seed Supabase:', e.message);
+        }
       }
       setLoading(false);
     }

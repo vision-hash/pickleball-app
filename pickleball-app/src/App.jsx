@@ -306,7 +306,7 @@ export default function App() {
         {tab==="members"   && <MembersTab db={db} isAdmin={isAdmin} save={save} showToast={showToast} currentUser={user}/>}
         {tab==="session"   && <SessionTab db={db} isAdmin={isAdmin} save={save} showToast={showToast} currentUser={user}/>}
         {tab==="standings" && <StandingsTab members={members} sessions={sessions}/>}
-        {tab==="personal"  && <PersonalTab db={db} currentUser={user}/>}
+        {tab==="personal"  && <PersonalTab db={db} currentUser={user} save={save} showToast={showToast}/>}
       </div>
 
       {toast && <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:toast.type==="success"?"#276749":"#742a2a",color:toast.type==="success"?"#9ae6b4":"#fc8181",padding:"10px 22px",borderRadius:12,fontWeight:800,fontSize:13,zIndex:1000,animation:"fadeIn .2s",whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>{toast.msg}</div>}
@@ -420,7 +420,7 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
     if (ids.length < 4) { showToast("Cần ít nhất 4 người","error"); return; }
     const mpr = Math.floor(ids.length/4);
     const rounds = sessionMode==="random" ? generateSchedule(ids) : [];
-    save({...db, activeSession:{id:Date.now().toString(), date:new Date().toLocaleDateString("vi-VN"), players:ids, rounds, finished:false, matchesPerRound:mpr, sitOutPerRound:ids.length-mpr*4, mode:sessionMode}});
+    save({...db, activeSession:{id:Date.now().toString(), date:new Date().toLocaleDateString("vi-VN"), players:ids, rounds, finished:false, matchesPerRound:mpr, sitOutPerRound:ids.length-mpr*4, mode:sessionMode, createdBy:currentUser.name}});
     showToast(sessionMode==="random" ? "Đã tạo lịch ngẫu nhiên!" : "Buổi kèo setup đã bắt đầu!");
   }
 
@@ -428,7 +428,7 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
     const all4 = [...cTeam1,...cTeam2];
     if (all4.some(x=>!x)) { showToast("Chọn đủ 4 người","error"); return; }
     if (new Set(all4).size < 4) { showToast("Không được chọn trùng người","error"); return; }
-    const newMatch = {id:"custom_"+Date.now(), team1:[cTeam1[0],cTeam1[1]], team2:[cTeam2[0],cTeam2[1]], score1:null,score2:null,winner:null,locked:false,custom:true};
+    const newMatch = {id:"custom_"+Date.now(), team1:[cTeam1[0],cTeam1[1]], team2:[cTeam2[0],cTeam2[1]], score1:null,score2:null,winner:null,locked:false,custom:true,createdBy:currentUser.name};
     const updated = {...activeSession};
     // Find or create "Kèo tự chọn" round
     const customRoundIdx = updated.rounds.findIndex(r=>r.isCustom);
@@ -610,6 +610,7 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
           </div>
           <span style={{fontSize:12,fontWeight:700,color:"#4a7c59"}}>{done}/{total} ({pct}%)</span>
         </div>
+        {activeSession.createdBy && <div style={{fontSize:11,color:"#4a5568",marginBottom:4}}>👤 Tạo bởi: <strong style={{color:"#a0aec0"}}>{activeSession.createdBy}</strong></div>}
         {activeSession.mode!=="custom" && <div style={{fontSize:11,color:"#4a5568",marginBottom:6}}>{activeSession.players?.length} người · {activeSession.matchesPerRound} trận/vòng</div>}
         <div style={{background:"#1a2535",borderRadius:6,height:5,overflow:"hidden",marginBottom:10}}>
           <div style={{height:"100%",width:pct+"%",background:"#276749",transition:".3s"}}/>
@@ -656,8 +657,9 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
                 </div>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                   {match.custom && <span style={{fontSize:10,color:"#90cdf4",background:"#1a2a3a",padding:"1px 7px",borderRadius:5,fontWeight:700}}>Kèo tự chọn</span>}
+                  {match.createdBy && <span style={{fontSize:10,color:"#4a5568"}}>👤 {match.createdBy}</span>}
                   {match.winner && <span style={{fontSize:11,fontWeight:800,color:match.winner===1?"#68d391":"#fc8181"}}>✅ {(match.winner===1?match.team1:match.team2).map(gn).join(" & ")} thắng</span>}
                 </div>
                 {isAdmin && <button onClick={()=>lockMatch(ri,mi)} style={{background:match.locked?"#1e3a27":"#1a2535",border:`1px solid ${match.locked?"#276749":"#2d3748"}`,borderRadius:6,padding:"3px 10px",fontSize:11,color:match.locked?"#68d391":"#4a5568",cursor:"pointer",fontWeight:700}}>{match.locked?"🔒 Khoá":"🔓 Khoá"}</button>}
@@ -683,9 +685,51 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
           ))}
         </div>
       )}
+
+      {sub==="password" && (
+        <ChangePassword myM={myM} db={db} save={save} showToast={showToast}/>
+      )}
     </div>
   );
 }
+
+// ─── CHANGE PASSWORD COMPONENT ───────────────────────────────────────────────
+function ChangePassword({myM, db, save, showToast}) {
+  const [cur,setCur]=useState(""), [nw,setNw]=useState(""), [nw2,setNw2]=useState(""), [done,setDone]=useState(false);
+  function submit() {
+    if (!cur) { showToast("Nhập mật khẩu hiện tại","error"); return; }
+    if (cur !== myM.password) { showToast("Mật khẩu hiện tại không đúng","error"); return; }
+    if (!nw || nw.length < 4) { showToast("Mật khẩu mới phải có ít nhất 4 ký tự","error"); return; }
+    if (nw !== nw2) { showToast("Xác nhận mật khẩu không khớp","error"); return; }
+    const updated = {...db, members: db.members.map(m => m.id===myM.id ? {...m, password:nw} : m)};
+    save(updated);
+    setCur(""); setNw(""); setNw2(""); setDone(true);
+    showToast("✅ Đã đổi mật khẩu thành công!");
+  }
+  return (
+    <div className="card" style={{animation:"slideUp .2s ease"}}>
+      <div style={{fontWeight:800,fontSize:15,marginBottom:4,color:"#68d391"}}>🔑 Đổi mật khẩu</div>
+      <div style={{fontSize:12,color:"#4a5568",marginBottom:16}}>Tài khoản: <strong style={{color:"#e2e8f0"}}>@{myM.username}</strong></div>
+      {done && <div style={{background:"#1a3a27",border:"1px solid #276749",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#68d391",fontWeight:700}}>✅ Mật khẩu đã được cập nhật! Dùng mật khẩu mới từ lần đăng nhập tiếp theo.</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu hiện tại</div>
+          <input type="password" className="inp" value={cur} onChange={e=>{setCur(e.target.value);setDone(false);}} placeholder="Nhập mật khẩu hiện tại..."/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu mới</div>
+          <input type="password" className="inp" value={nw} onChange={e=>{setNw(e.target.value);setDone(false);}} placeholder="Ít nhất 4 ký tự..."/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Xác nhận mật khẩu mới</div>
+          <input type="password" className="inp" value={nw2} onChange={e=>{setNw2(e.target.value);setDone(false);}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập lại mật khẩu mới..."/>
+        </div>
+        <button className="btn-g" onClick={submit} style={{marginTop:4,padding:12,fontSize:14,borderRadius:11}}>Đổi mật khẩu →</button>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── STANDINGS TAB ────────────────────────────────────────────────────────────
 function StandingsTab({ members, sessions }) {
@@ -829,7 +873,7 @@ function StandingsTab({ members, sessions }) {
 }
 
 // ─── PERSONAL TAB ──────────────────────────────────────────────────────────────
-function PersonalTab({ db, currentUser }) {
+function PersonalTab({ db, currentUser, save, showToast }) {
   const { members, sessions } = db;
   const [sub, setSub] = useState("history");
   const myM = members.find(m=>m.username===currentUser.username);
@@ -871,6 +915,7 @@ function PersonalTab({ db, currentUser }) {
       <div style={{display:"flex",borderBottom:"1px solid #1e2535",marginBottom:14}}>
         <button className={sub==="history"?"stab on":"stab"} onClick={()=>setSub("history")}>📋 Lịch sử ({hist.length})</button>
         <button className={sub==="h2h"?"stab on":"stab"} onClick={()=>setSub("h2h")}>⚔️ Đối đầu ({h2h.length})</button>
+        <button className={sub==="password"?"stab on":"stab"} onClick={()=>setSub("password")}>🔑 Đổi MK</button>
       </div>
 
       {sub==="history" && (

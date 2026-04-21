@@ -686,51 +686,11 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
         </div>
       )}
 
-      {sub==="password" && (
-        <ChangePassword myM={myM} db={db} save={save} showToast={showToast}/>
-      )}
     </div>
   );
 }
 
 // ─── CHANGE PASSWORD COMPONENT ───────────────────────────────────────────────
-function ChangePassword({myM, db, save, showToast}) {
-  const [cur,setCur]=useState(""), [nw,setNw]=useState(""), [nw2,setNw2]=useState(""), [done,setDone]=useState(false);
-  function submit() {
-    if (!cur) { showToast("Nhập mật khẩu hiện tại","error"); return; }
-    if (cur !== myM.password) { showToast("Mật khẩu hiện tại không đúng","error"); return; }
-    if (!nw || nw.length < 4) { showToast("Mật khẩu mới phải có ít nhất 4 ký tự","error"); return; }
-    if (nw !== nw2) { showToast("Xác nhận mật khẩu không khớp","error"); return; }
-    const updated = {...db, members: db.members.map(m => m.id===myM.id ? {...m, password:nw} : m)};
-    save(updated);
-    setCur(""); setNw(""); setNw2(""); setDone(true);
-    showToast("✅ Đã đổi mật khẩu thành công!");
-  }
-  return (
-    <div className="card" style={{animation:"slideUp .2s ease"}}>
-      <div style={{fontWeight:800,fontSize:15,marginBottom:4,color:"#68d391"}}>🔑 Đổi mật khẩu</div>
-      <div style={{fontSize:12,color:"#4a5568",marginBottom:16}}>Tài khoản: <strong style={{color:"#e2e8f0"}}>@{myM.username}</strong></div>
-      {done && <div style={{background:"#1a3a27",border:"1px solid #276749",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#68d391",fontWeight:700}}>✅ Mật khẩu đã được cập nhật! Dùng mật khẩu mới từ lần đăng nhập tiếp theo.</div>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <div>
-          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu hiện tại</div>
-          <input type="password" className="inp" value={cur} onChange={e=>{setCur(e.target.value);setDone(false);}} placeholder="Nhập mật khẩu hiện tại..."/>
-        </div>
-        <div>
-          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu mới</div>
-          <input type="password" className="inp" value={nw} onChange={e=>{setNw(e.target.value);setDone(false);}} placeholder="Ít nhất 4 ký tự..."/>
-        </div>
-        <div>
-          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Xác nhận mật khẩu mới</div>
-          <input type="password" className="inp" value={nw2} onChange={e=>{setNw2(e.target.value);setDone(false);}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập lại mật khẩu mới..."/>
-        </div>
-        <button className="btn-g" onClick={submit} style={{marginTop:4,padding:12,fontSize:14,borderRadius:11}}>Đổi mật khẩu →</button>
-      </div>
-    </div>
-  );
-}
-
-
 // ─── STANDINGS TAB ────────────────────────────────────────────────────────────
 function StandingsTab({ members, sessions }) {
   const [detail, setDetail] = useState(null);
@@ -1003,6 +963,47 @@ function PersonalTab({ db, currentUser, save, showToast }) {
           })}
         </div>
       )}
+      {sub==="password" && (
+        <ChangePassword myM={myM} db={db} save={save} showToast={showToast}/>
+      )}
     </div>
   );
 }
+
+function ChangePassword({myM, db, save, showToast}) {
+  const [cur,setCur]=useState(""), [nw,setNw]=useState(""), [nw2,setNw2]=useState(""), [done,setDone]=useState(false);
+  function submit() {
+    if (!cur) { showToast("Nhập mật khẩu hiện tại","error"); return; }
+    if (cur !== myM.password) { showToast("Mật khẩu hiện tại không đúng","error"); return; }
+    if (!nw || nw.length < 4) { showToast("Mật khẩu mới phải có ít nhất 4 ký tự","error"); return; }
+    if (nw !== nw2) { showToast("Xác nhận mật khẩu không khớp","error"); return; }
+    const updated = {...db, members: db.members.map(m => m.id===myM.id ? {...m, password:nw} : m)};
+    save(updated);
+    setCur(""); setNw(""); setNw2(""); setDone(true);
+    showToast("✅ Đã đổi mật khẩu thành công!");
+  }
+  return (
+    <div className="card" style={{animation:"slideUp .2s ease"}}>
+      <div style={{fontWeight:800,fontSize:15,marginBottom:4,color:"#68d391"}}>🔑 Đổi mật khẩu</div>
+      <div style={{fontSize:12,color:"#4a5568",marginBottom:16}}>Tài khoản: <strong style={{color:"#e2e8f0"}}>@{myM.username}</strong></div>
+      {done && <div style={{background:"#1a3a27",border:"1px solid #276749",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#68d391",fontWeight:700}}>✅ Mật khẩu đã được cập nhật! Dùng mật khẩu mới từ lần đăng nhập tiếp theo.</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu hiện tại</div>
+          <input type="password" className="inp" value={cur} onChange={e=>{setCur(e.target.value);setDone(false);}} placeholder="Nhập mật khẩu hiện tại..."/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Mật khẩu mới</div>
+          <input type="password" className="inp" value={nw} onChange={e=>{setNw(e.target.value);setDone(false);}} placeholder="Ít nhất 4 ký tự..."/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:".05em"}}>Xác nhận mật khẩu mới</div>
+          <input type="password" className="inp" value={nw2} onChange={e=>{setNw2(e.target.value);setDone(false);}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập lại mật khẩu mới..."/>
+        </div>
+        <button className="btn-g" onClick={submit} style={{marginTop:4,padding:12,fontSize:14,borderRadius:11}}>Đổi mật khẩu →</button>
+      </div>
+    </div>
+  );
+}
+
+

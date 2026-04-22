@@ -214,11 +214,11 @@ const SEED_MEMBERS = [
   {id:"4",name:"Anh Quân", username:"Anhquan", password:"123456", role:"member"},
   {id:"5",name:"Tuấn Anh", username:"Tuananh", password:"123456", role:"member"},
   {id:"6",name:"Hiếu",     username:"Hieu",    password:"123456", role:"member"},
-  {id:"7",name:"Bảo Châu",  username:"Bachau",  password:"123456", role:"member"},
+  {id:"7",name:"Ba Châu",  username:"Bachau",  password:"123456", role:"member"},
   {id:"8",name:"Dương",    username:"Duong",   password:"123456", role:"member"},
   {id:"9",name:"Long Tí",  username:"Longti",  password:"123456", role:"member"},
   {id:"10",name:"Hoàng",   username:"Hoang",   password:"123456", role:"member"},
-  {id:"11",name:"Hùng hùng hục",username:"Hung",    password:"123456", role:"member"},
+  {id:"11",name:"Hùng Kều",username:"Hung",    password:"123456", role:"member"},
 ];
 
 export default function App() {
@@ -319,6 +319,7 @@ function MembersTab({ db, isAdmin, save, showToast, currentUser }) {
   const { members } = db;
   const [nm,setNm]=useState(""), [nu,setNu]=useState(""), [nr,setNr]=useState("member"), [np,setNp]=useState(DEFAULT_PASSWORD);
   const [resetId,setResetId]=useState(null), [resetPw,setResetPw]=useState("");
+  const [editId,setEditId]=useState(null), [editName,setEditName]=useState("");
 
   function add() {
     if (!isAdmin) { showToast("Chỉ Admin","error"); return; }
@@ -335,6 +336,14 @@ function MembersTab({ db, isAdmin, save, showToast, currentUser }) {
     if (!window.confirm("Xoá thành viên này?")) return;
     save({...db, members:members.filter(m=>m.id!==id)});
     showToast("Đã xoá");
+  }
+  function doRename(id) {
+    const m = members.find(x=>x.id===id); if (!m) return;
+    const nm = editName.trim();
+    if (!nm) { showToast("Tên không được để trống","error"); return; }
+    save({...db, members:members.map(x=>x.id===id?{...x,name:nm}:x)});
+    setEditId(null); setEditName("");
+    showToast("Đã đổi tên thành "+nm);
   }
   function doReset(id) {
     const m = members.find(x=>x.id===id); if (!m) return;
@@ -357,6 +366,20 @@ function MembersTab({ db, isAdmin, save, showToast, currentUser }) {
             <div style={{display:"flex",gap:8,marginTop:12}}>
               <button onClick={()=>{setResetId(null);setResetPw("");}} className="btn-gray" style={{flex:1,padding:"9px 0",fontSize:13,width:"auto"}}>Huỷ</button>
               <button onClick={()=>doReset(resetId)} className="btn-g" style={{flex:1,padding:"9px 0",fontSize:13}}>Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editId && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:20}}>
+          <div style={{background:"#1a2535",border:"1px solid #2d3748",borderRadius:16,padding:"22px 18px",maxWidth:320,width:"100%"}}>
+            <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>✏️ Sửa tên thành viên</div>
+            <div style={{fontSize:12,color:"#4a5568",marginBottom:10}}>@{members.find(x=>x.id===editId)?.username}</div>
+            <input className="inp" type="text" value={editName} onChange={e=>setEditName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doRename(editId)} placeholder="Nhập tên mới..." autoFocus/>
+            <div style={{display:"flex",gap:8,marginTop:12}}>
+              <button onClick={()=>{setEditId(null);setEditName("");}} className="btn-gray" style={{flex:1,padding:"9px 0",fontSize:13,width:"auto"}}>Huỷ</button>
+              <button onClick={()=>doRename(editId)} className="btn-g" style={{flex:1,padding:"9px 0",fontSize:13}}>Lưu tên</button>
             </div>
           </div>
         </div>
@@ -391,6 +414,7 @@ function MembersTab({ db, isAdmin, save, showToast, currentUser }) {
           </div>
           {isAdmin && (
             <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setEditId(m.id);setEditName(m.name);}} style={{background:"#1a2a3a",border:"1px solid #2d5a3a",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#68d391",cursor:"pointer",fontWeight:700}}>✏️</button>
               <button onClick={()=>{setResetId(m.id);setResetPw("");}} style={{background:"#1a2a3a",border:"1px solid #2d4a6a",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#60a5fa",cursor:"pointer",fontWeight:700}}>🔑</button>
               <button className="btn-r" onClick={()=>del(m.id)} style={{padding:"5px 12px",fontSize:12}}>Xoá</button>
             </div>

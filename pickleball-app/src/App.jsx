@@ -214,11 +214,11 @@ const SEED_MEMBERS = [
   {id:"4",name:"Anh Quân", username:"Anhquan", password:"123456", role:"member"},
   {id:"5",name:"Tuấn Anh", username:"Tuananh", password:"123456", role:"member"},
   {id:"6",name:"Hiếu",     username:"Hieu",    password:"123456", role:"member"},
-  {id:"7",name:"Ba Châu",  username:"Bachau",  password:"123456", role:"member"},
+  {id:"7",name:"Bảo Châu",  username:"Bachau",  password:"123456", role:"member"},
   {id:"8",name:"Dương",    username:"Duong",   password:"123456", role:"member"},
   {id:"9",name:"Long Tí",  username:"Longti",  password:"123456", role:"member"},
   {id:"10",name:"Hoàng",   username:"Hoang",   password:"123456", role:"member"},
-  {id:"11",name:"Hùng Kều",username:"Hung",    password:"123456", role:"member"},
+  {id:"11",name:"Hùng hùng hục",username:"Hung",    password:"123456", role:"member"},
 ];
 
 export default function App() {

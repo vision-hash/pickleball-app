@@ -731,6 +731,12 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
     save({...db, sessions: newSessions});
     showToast("Đã lưu thay đổi!");
   }
+  function deleteSession(sessId) {
+    const sess = sessions.find(s=>s.id===sessId);
+    if (!window.confirm("Xoá toàn bộ buổi " + (sess?.date||"") + "? Không thể hoàn tác!")) return;
+    save({...db, sessions: db.sessions.filter(s=>s.id!==sessId)});
+    showToast("Đã xoá buổi " + (sess?.date||""));
+  }
   function upScore(sess, ri, mi, team, val) {
     const v = val===""?null:Math.max(0,Math.min(13,+val));
     const upd = {...sess, rounds: sess.rounds.map((r,rI)=>rI!==ri?r:{
@@ -810,12 +816,15 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
             </button>
           )}
           {isAdmin && editMode && (
-            <div style={{display:"flex",gap:8}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <button onClick={()=>setAddCustom(true)} style={{background:"#1a2a3a",border:"1.5px solid #2d5a3d",borderRadius:10,padding:"8px 14px",color:"#68d391",fontSize:13,fontWeight:800,cursor:"pointer"}}>
                 ➕ Thêm kèo
               </button>
+              <button onClick={()=>{if(window.confirm("Xoá toàn bộ buổi "+sess.date+"? Không thể hoàn tác!")){deleteSession(sess.id);setDetail(null);setEditMode(false);}}} style={{background:"#2a1418",border:"1.5px solid #742a2a",borderRadius:10,padding:"8px 14px",color:"#fc8181",fontSize:13,fontWeight:800,cursor:"pointer"}}>
+                🗑️ Xoá buổi
+              </button>
               <button onClick={()=>setEditMode(false)} style={{background:"#276749",border:"none",borderRadius:10,padding:"8px 14px",color:"#9ae6b4",fontSize:13,fontWeight:800,cursor:"pointer"}}>
-                ✅ Xong chỉnh sửa
+                ✅ Xong
               </button>
             </div>
           )}
@@ -851,7 +860,7 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
                 <div key={m.id} style={{background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,border:`1px solid ${editMode?"#2d4a6a":m.winner===1?"#1e3a27":"#3a1e1e"}`,overflow:"hidden"}}>
                   <div style={{display:"flex",alignItems:"center",padding:"8px 10px"}}>
                     <div style={{flex:1}}>{m.team1.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===1?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
-                    {editMode ? (
+                    {(editMode || m.custom) ? (
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                         <input type="number" min={0} max={13} className="sinp" value={m.score1??""} onChange={e=>upScore(sess,ri,mi,1,e.target.value)} style={{color:m.winner===1?"#68d391":"#e2e8f0"}}/>
                         <span style={{color:"#4a5568",fontWeight:900,fontSize:18}}>–</span>
@@ -866,7 +875,7 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
                     )}
                     <div style={{flex:1,textAlign:"right"}}>{m.team2.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===2?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
                   </div>
-                  {editMode && (
+                  {(editMode || m.custom) && (
                     <div style={{borderTop:"1px solid #1e2535",padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:11,color:"#4a5568"}}>
                         {m.winner?<span style={{color:m.winner===1?"#68d391":"#fc8181",fontWeight:700}}>✅ {(m.winner===1?m.team1:m.team2).map(gn).join(" & ")} thắng</span>:"Chưa có kết quả"}
@@ -943,18 +952,23 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
         const done = sess.rounds.flatMap(r=>r.matches).filter(m=>m.score1!==null).length;
         const top = st[0];
         return (
-          <button key={sess.id} onClick={()=>setDetail(sess.id)} style={{width:"100%",background:"#131825",border:"1px solid #1e2535",borderRadius:12,padding:"12px 14px",marginBottom:8,cursor:"pointer",textAlign:"left",transition:".15s"}} onMouseOver={e=>e.currentTarget.style.borderColor="#276749"} onMouseOut={e=>e.currentTarget.style.borderColor="#1e2535"}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div>
-                <div style={{fontWeight:800,fontSize:14,color:"#e2e8f0",display:"flex",alignItems:"center",gap:6}}>
-                  📅 Buổi {sess.date}
-                  {sess.mode==="custom"&&<span style={{fontSize:10,background:"#1a2a3a",color:"#90cdf4",padding:"1px 7px",borderRadius:5,fontWeight:700}}>Kèo setup</span>}
+          <div key={sess.id} style={{display:"flex",gap:8,marginBottom:8,alignItems:"stretch"}}>
+            <button onClick={()=>setDetail(sess.id)} style={{flex:1,background:"#131825",border:"1px solid #1e2535",borderRadius:12,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:".15s"}} onMouseOver={e=>e.currentTarget.style.borderColor="#276749"} onMouseOut={e=>e.currentTarget.style.borderColor="#1e2535"}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#e2e8f0",display:"flex",alignItems:"center",gap:6}}>
+                    📅 Buổi {sess.date}
+                    {sess.mode==="custom"&&<span style={{fontSize:10,background:"#1a2a3a",color:"#90cdf4",padding:"1px 7px",borderRadius:5,fontWeight:700}}>Kèo setup</span>}
+                  </div>
+                  <div style={{fontSize:11,color:"#4a5568",marginTop:2}}>{sess.players?.length||0} người · {done} trận{top?` · 🥇 ${top.name} (${top.wins}W)`:""}</div>
                 </div>
-                <div style={{fontSize:11,color:"#4a5568",marginTop:2}}>{sess.players?.length||0} người · {done} trận{top?` · 🥇 ${top.name} (${top.wins}W)`:""}</div>
+                <span style={{color:"#276749",fontSize:20,fontWeight:900}}>›</span>
               </div>
-              <span style={{color:"#276749",fontSize:20,fontWeight:900}}>›</span>
-            </div>
-          </button>
+            </button>
+            {isAdmin && (
+              <button onClick={()=>deleteSession(sess.id)} style={{background:"#2a1418",border:"1px solid #742a2a",borderRadius:12,padding:"0 14px",color:"#fc8181",fontSize:18,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}} title="Xoá buổi này">🗑️</button>
+            )}
+          </div>
         );
       })}
       {sessions.length===0&&<div style={{textAlign:"center",color:"#4a5568",fontSize:13,padding:"16px 0"}}>Chưa có buổi nào</div>}

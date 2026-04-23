@@ -305,7 +305,7 @@ export default function App() {
       <div style={{padding:14,paddingBottom:36}}>
         {tab==="members"   && <MembersTab db={db} isAdmin={isAdmin} save={save} showToast={showToast} currentUser={user}/>}
         {tab==="session"   && <SessionTab db={db} isAdmin={isAdmin} save={save} showToast={showToast} currentUser={user}/>}
-        {tab==="standings" && <StandingsTab members={members} sessions={sessions}/>}
+        {tab==="standings" && <StandingsTab members={members} sessions={sessions} isAdmin={isAdmin} save={save} showToast={showToast} db={db}/>}
         {tab==="personal"  && <PersonalTab db={db} currentUser={user} save={save} showToast={showToast}/>}
       </div>
 
@@ -716,10 +716,54 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
 
 // ─── CHANGE PASSWORD COMPONENT ───────────────────────────────────────────────
 // ─── STANDINGS TAB ────────────────────────────────────────────────────────────
-function StandingsTab({ members, sessions }) {
+function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
   const [detail, setDetail] = useState(null);
+  const [editMode, setEditMode] = useState(false);   // đang chỉnh sửa buổi
+  const [addCustom, setAddCustom] = useState(false); // modal thêm kèo
+  const [cTeam1, setCTeam1] = useState(["",""]); 
+  const [cTeam2, setCTeam2] = useState(["",""]);
   const stats = calcOverall(members, sessions);
   const gn = (id) => members.find(m=>m.id===id)?.name || id;
+
+  // ── Edit session helpers ──────────────────────────────────────────────────
+  function saveSession(updatedSess) {
+    const newSessions = db.sessions.map(s => s.id===updatedSess.id ? updatedSess : s);
+    save({...db, sessions: newSessions});
+    showToast("Đã lưu thay đổi!");
+  }
+  function upScore(sess, ri, mi, team, val) {
+    const v = val===""?null:Math.max(0,Math.min(13,+val));
+    const upd = {...sess, rounds: sess.rounds.map((r,rI)=>rI!==ri?r:{
+      ...r, matches: r.matches.map((m,mI)=>{
+        if(mI!==mi) return m;
+        const nm={...m,[team===1?"score1":"score2"]:v};
+        if(nm.score1!==null&&nm.score2!==null) nm.winner=nm.score1>nm.score2?1:2; else nm.winner=null;
+        return nm;
+      })
+    })};
+    saveSession(upd);
+  }
+  function delMatch(sess, ri, mi) {
+    if(!window.confirm("Xoá trận này?")) return;
+    const upd = {...sess, rounds: sess.rounds.map((r,rI)=>rI!==ri?r:{
+      ...r, matches: r.matches.filter((_,mI)=>mI!==mi)
+    }).filter(r=>r.matches.length>0)};
+    saveSession(upd);
+    showToast("Đã xoá trận!");
+  }
+  function addCustomMatch(sess) {
+    const all4=[...cTeam1,...cTeam2];
+    if(all4.some(x=>!x)){showToast("Chọn đủ 4 người","error");return;}
+    if(new Set(all4).size<4){showToast("Không được trùng người","error");return;}
+    const newMatch={id:"edit_"+Date.now(),team1:[cTeam1[0],cTeam1[1]],team2:[cTeam2[0],cTeam2[1]],score1:null,score2:null,winner:null,locked:false,custom:true};
+    const upd={...sess};
+    const ciIdx=upd.rounds.findIndex(r=>r.isCustom);
+    if(ciIdx>=0){upd.rounds=upd.rounds.map((r,i)=>i===ciIdx?{...r,matches:[...r.matches,newMatch]}:r);}
+    else{upd.rounds=[...upd.rounds,{roundNum:upd.rounds.length+1,matches:[newMatch],sitters:[],isCustom:true,roundLabel:"Kèo bổ sung"}];}
+    saveSession(upd);
+    setCTeam1(["",""]); setCTeam2(["",""]); setAddCustom(false);
+    showToast("Đã thêm kèo bổ sung!");
+  }
 
   if (detail) {
     const sess = sessions.find(s=>s.id===detail);
@@ -727,10 +771,54 @@ function StandingsTab({ members, sessions }) {
     const st = calcSession(members, sess.rounds);
     return (
       <div style={{animation:"fadeIn .25s ease"}}>
-        <button className="btn-back" onClick={()=>setDetail(null)}>← Quay lại tổng sắp</button>
-        <div style={{marginBottom:16}}>
-          <div style={{fontWeight:900,fontSize:18,color:"#68d391"}}>📅 Buổi {sess.date}</div>
-          <div style={{fontSize:12,color:"#4a7c59",marginTop:2}}>{sess.players?.length||0} người · {sess.rounds.flatMap(r=>r.matches).filter(m=>m.score1!==null).length} trận đã đánh {sess.mode==="custom"?"· Kèo setup":""}</div>
+        <button className="btn-back" onClick={()=>{setDetail(null);setEditMode(false);}}>← Quay lại tổng sắp</button>
+
+        {/* Add custom match modal */}
+        {addCustom && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
+            <div style={{background:"#1a2535",border:"1px solid #2d3748",borderRadius:16,padding:"20px 16px",maxWidth:360,width:"100%"}}>
+              <div style={{fontWeight:800,fontSize:15,marginBottom:14,color:"#90cdf4"}}>➕ Thêm kèo bổ sung</div>
+              {[["Đội 1",cTeam1,setCTeam1],["Đội 2",cTeam2,setCTeam2]].map(([label,team,setTeam])=>(
+                <div key={label} style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>{label}</div>
+                  <div style={{display:"flex",gap:8}}>
+                    {[0,1].map(i=>(
+                      <select key={i} value={team[i]} onChange={e=>{const t=[...team];t[i]=e.target.value;setTeam(t);}} style={{flex:1,padding:"9px 10px",borderRadius:9,border:"1.5px solid #2d3748",background:"#0d1117",color:team[i]?"#e2e8f0":"#4a5568",fontSize:13,outline:"none"}}>
+                        <option value="">Chọn người {i+1}...</option>
+                        {members.map(m=>(<option key={m.id} value={m.id}>{m.name}</option>))}
+                      </select>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <button onClick={()=>{setAddCustom(false);setCTeam1(["",""]);setCTeam2(["",""]);}} className="btn-gray" style={{flex:1,padding:"9px 0",fontSize:13,width:"auto"}}>Huỷ</button>
+                <button onClick={()=>addCustomMatch(sess)} className="btn-blue" style={{flex:1,padding:"9px 0",fontSize:13,width:"auto"}}>Thêm kèo</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+          <div>
+            <div style={{fontWeight:900,fontSize:18,color:"#68d391"}}>📅 Buổi {sess.date}</div>
+            <div style={{fontSize:12,color:"#4a7c59",marginTop:2}}>{sess.players?.length||0} người · {sess.rounds.flatMap(r=>r.matches).filter(m=>m.score1!==null).length} trận đã đánh {sess.mode==="custom"?"· Kèo setup":""}</div>
+          </div>
+          {isAdmin && !editMode && (
+            <button onClick={()=>setEditMode(true)} style={{background:"#1a2a3a",border:"1.5px solid #2d4a6a",borderRadius:10,padding:"8px 14px",color:"#90cdf4",fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              ✏️ Chỉnh sửa buổi
+            </button>
+          )}
+          {isAdmin && editMode && (
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setAddCustom(true)} style={{background:"#1a2a3a",border:"1.5px solid #2d5a3d",borderRadius:10,padding:"8px 14px",color:"#68d391",fontSize:13,fontWeight:800,cursor:"pointer"}}>
+                ➕ Thêm kèo
+              </button>
+              <button onClick={()=>setEditMode(false)} style={{background:"#276749",border:"none",borderRadius:10,padding:"8px 14px",color:"#9ae6b4",fontSize:13,fontWeight:800,cursor:"pointer"}}>
+                ✅ Xong chỉnh sửa
+              </button>
+            </div>
+          )}
         </div>
         <div className="card">
           <div style={{fontWeight:800,color:"#68d391",marginBottom:10}}>🏅 Xếp hạng buổi</div>
@@ -760,14 +848,32 @@ function StandingsTab({ members, sessions }) {
                 </div>
               );
               return (
-                <div key={m.id} style={{display:"flex",alignItems:"center",padding:"8px 10px",background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,border:`1px solid ${m.winner===1?"#1e3a27":"#3a1e1e"}`}}>
-                  <div style={{flex:1}}>{m.team1.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===1?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
-                  <div style={{padding:"2px 12px",fontFamily:"monospace",fontWeight:900,fontSize:16,flexShrink:0}}>
-                    <span style={{color:m.winner===1?"#68d391":"#fc8181"}}>{m.score1}</span>
-                    <span style={{color:"#4a5568",margin:"0 4px"}}>–</span>
-                    <span style={{color:m.winner===2?"#68d391":"#fc8181"}}>{m.score2}</span>
+                <div key={m.id} style={{background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,border:`1px solid ${editMode?"#2d4a6a":m.winner===1?"#1e3a27":"#3a1e1e"}`,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",padding:"8px 10px"}}>
+                    <div style={{flex:1}}>{m.team1.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===1?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
+                    {editMode ? (
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                        <input type="number" min={0} max={13} className="sinp" value={m.score1??""} onChange={e=>upScore(sess,ri,mi,1,e.target.value)} style={{color:m.winner===1?"#68d391":"#e2e8f0"}}/>
+                        <span style={{color:"#4a5568",fontWeight:900,fontSize:18}}>–</span>
+                        <input type="number" min={0} max={13} className="sinp" value={m.score2??""} onChange={e=>upScore(sess,ri,mi,2,e.target.value)} style={{color:m.winner===2?"#68d391":"#e2e8f0"}}/>
+                      </div>
+                    ) : (
+                      <div style={{padding:"2px 12px",fontFamily:"monospace",fontWeight:900,fontSize:16,flexShrink:0}}>
+                        <span style={{color:m.winner===1?"#68d391":"#fc8181"}}>{m.score1}</span>
+                        <span style={{color:"#4a5568",margin:"0 4px"}}>–</span>
+                        <span style={{color:m.winner===2?"#68d391":"#fc8181"}}>{m.score2}</span>
+                      </div>
+                    )}
+                    <div style={{flex:1,textAlign:"right"}}>{m.team2.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===2?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
                   </div>
-                  <div style={{flex:1,textAlign:"right"}}>{m.team2.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===2?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
+                  {editMode && (
+                    <div style={{borderTop:"1px solid #1e2535",padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:11,color:"#4a5568"}}>
+                        {m.winner?<span style={{color:m.winner===1?"#68d391":"#fc8181",fontWeight:700}}>✅ {(m.winner===1?m.team1:m.team2).map(gn).join(" & ")} thắng</span>:"Chưa có kết quả"}
+                      </div>
+                      <button onClick={()=>delMatch(sess,ri,mi)} style={{background:"#2a1418",border:"1px solid #742a2a",borderRadius:6,padding:"3px 10px",fontSize:11,color:"#fc8181",cursor:"pointer",fontWeight:700}}>🗑️ Xoá trận</button>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -728,12 +728,14 @@ function MonthlyBeerStats({ members, sessions }) {
   const monthMap = {};
   sessions.forEach(sess => {
     if (!sess.date) return;
-    // date format: DD/MM/YYYY or YYYY-MM-DD
+    // date format: D/M/YYYY, DD/MM/YYYY, or YYYY-MM-DD
     let month;
     const d = sess.date;
-    if (/\d{2}\/\d{2}\/\d{4}/.test(d)) {
+    if (d.includes("/")) {
       const parts = d.split("/");
-      month = `${parts[2]}-${parts[1]}`;
+      const mo = (parts[1]||"01").padStart(2,"0");
+      const yr = parts[2]||"2000";
+      month = yr+"-"+mo;
     } else if (/\d{4}-\d{2}/.test(d)) {
       month = d.substring(0,7);
     } else {

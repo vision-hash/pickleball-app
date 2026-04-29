@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const WIN_SCORE = 13, FINE = 20000, KEY = "pickleball_v6";
+const isAce = (s1,s2) => (s1===13&&s2===0)||(s1===0&&s2===13);
 const DEFAULT_PASSWORD = "123456";
 const fmt = (n) => Math.round(n).toLocaleString("vi-VN");
 const shuffle = (arr) => { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
@@ -79,23 +80,23 @@ function generateSchedule(playerIds) {
 
 // ─── STATS ───────────────────────────────────────────────────────────────────
 function calcSession(members, rounds) {
-  const s = {}; members.forEach(m=>{s[m.id]={id:m.id,name:m.name,wins:0,losses:0,pf:0,fine:0,played:0};});
+  const s = {}; members.forEach(m=>{s[m.id]={id:m.id,name:m.name,wins:0,losses:0,pf:0,fine:0,played:0,aces:0};});
   rounds.forEach(r=>r.matches.forEach(m=>{
     if(m.score1===null||m.score2===null) return;
-    const s1=+m.score1,s2=+m.score2,w1=s1>s2;
-    m.team1.forEach(p=>{if(!s[p])return;s[p].played++;w1?s[p].wins++:(s[p].losses++,s[p].fine+=FINE);s[p].pf+=s1;});
-    m.team2.forEach(p=>{if(!s[p])return;s[p].played++;!w1?s[p].wins++:(s[p].losses++,s[p].fine+=FINE);s[p].pf+=s2;});
+    const s1=+m.score1,s2=+m.score2,w1=s1>s2,ace=isAce(s1,s2),mult=ace?2:1;
+    m.team1.forEach(p=>{if(!s[p])return;s[p].played++;if(w1){s[p].wins++;if(ace)s[p].aces++;}else{s[p].losses+=mult;s[p].fine+=FINE*mult;}s[p].pf+=s1;});
+    m.team2.forEach(p=>{if(!s[p])return;s[p].played++;if(!w1){s[p].wins++;if(ace)s[p].aces++;}else{s[p].losses+=mult;s[p].fine+=FINE*mult;}s[p].pf+=s2;});
   }));
   return Object.values(s).filter(x=>x.played>0).sort((a,b)=>b.wins!==a.wins?b.wins-a.wins:b.pf-a.pf);
 }
 
 function calcOverall(members, sessions) {
-  const s = {}; members.forEach(m=>{s[m.id]={id:m.id,name:m.name,total:0,wins:0,losses:0,pf:0,fine:0};});
+  const s = {}; members.forEach(m=>{s[m.id]={id:m.id,name:m.name,total:0,wins:0,losses:0,pf:0,fine:0,aces:0};});
   sessions.forEach(sess=>sess.rounds.forEach(r=>r.matches.forEach(m=>{
     if(m.score1===null||m.score2===null) return;
-    const s1=+m.score1,s2=+m.score2,w1=s1>s2;
-    m.team1.forEach(p=>{if(!s[p])return;s[p].total++;w1?s[p].wins++:(s[p].losses++,s[p].fine+=FINE);s[p].pf+=s1;});
-    m.team2.forEach(p=>{if(!s[p])return;s[p].total++;!w1?s[p].wins++:(s[p].losses++,s[p].fine+=FINE);s[p].pf+=s2;});
+    const s1=+m.score1,s2=+m.score2,w1=s1>s2,ace=isAce(s1,s2),mult=ace?2:1;
+    m.team1.forEach(p=>{if(!s[p])return;s[p].total++;if(w1){s[p].wins++;if(ace)s[p].aces++;}else{s[p].losses+=mult;s[p].fine+=FINE*mult;}s[p].pf+=s1;});
+    m.team2.forEach(p=>{if(!s[p])return;s[p].total++;if(!w1){s[p].wins++;if(ace)s[p].aces++;}else{s[p].losses+=mult;s[p].fine+=FINE*mult;}s[p].pf+=s2;});
   })));
   return Object.values(s).filter(x=>x.total>0).sort((a,b)=>{
     if(b.wins!==a.wins) return b.wins-a.wins;
@@ -113,7 +114,7 @@ function getHistory(myId, sessions, members) {
     if(!in1&&!in2) return;
     const my=in1?m.team1:m.team2,opp=in1?m.team2:m.team1;
     const ms=in1?+m.score1:+m.score2,os=in1?+m.score2:+m.score1;
-    res.push({date:sess.date,roundNum:round.roundNum,partner:my.filter(p=>p!==myId),opponents:opp,myScore:ms,oppScore:os,won:ms>os,custom:m.custom||false});
+    res.push({date:sess.date,roundNum:round.roundNum,partner:my.filter(p=>p!==myId),opponents:opp,myScore:ms,oppScore:os,won:ms>os,custom:m.custom||false,ace:isAce(ms,os)});
   })));
   return res;
 }
@@ -655,8 +656,11 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
             </div>
             {round.sitters?.length>0 && <div style={{fontSize:11,color:"#4a5568"}}>Nghỉ: {round.sitters.map(gn).join(", ")}</div>}
           </div>
-          {round.matches.map((match,mi)=>(
-            <div key={match.id} style={{background:"#0d1117",borderRadius:12,padding:12,marginBottom:mi<round.matches.length-1?8:0,border:`1px solid ${match.winner===1?"#276749":match.winner===2?"#742a2a":match.custom?"#1e3a5f":"#1e2535"}`}}>
+          {round.matches.map((match,mi)=>{
+            const matchAce = match.score1!==null&&match.score2!==null&&isAce(+match.score1,+match.score2);
+            return (
+            <div key={match.id} style={{background:"#0d1117",borderRadius:12,padding:12,marginBottom:mi<round.matches.length-1?8:0,border:`1px solid ${matchAce?"#b7791f":match.winner===1?"#276749":match.winner===2?"#742a2a":match.custom?"#1e3a5f":"#1e2535"}`}}>
+              {matchAce && <div style={{textAlign:"center",marginBottom:8,padding:"4px 0",background:"linear-gradient(90deg,#7c4a00,#b7791f,#7c4a00)",borderRadius:7,fontSize:12,fontWeight:900,color:"#fefcbf",letterSpacing:".06em"}}>🏅 ACE — Chiến thắng tuyệt đối! Đội thua nộp 2🍺</div>}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
                 <div style={{flex:1}}>
                   {match.team1.map(pid=>(
@@ -689,7 +693,8 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
                 {isAdmin && <button onClick={()=>lockMatch(ri,mi)} style={{background:match.locked?"#1e3a27":"#1a2535",border:`1px solid ${match.locked?"#276749":"#2d3748"}`,borderRadius:6,padding:"3px 10px",fontSize:11,color:match.locked?"#68d391":"#4a5568",cursor:"pointer",fontWeight:700}}>{match.locked?"🔒 Khoá":"🔓 Khoá"}</button>}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ))}
 
@@ -715,6 +720,85 @@ function SessionTab({ db, isAdmin, save, showToast, currentUser }) {
 }
 
 // ─── CHANGE PASSWORD COMPONENT ───────────────────────────────────────────────
+// ─── MONTHLY BEER STATS ──────────────────────────────────────────────────────
+function MonthlyBeerStats({ members, sessions }) {
+  const [selMonth, setSelMonth] = useState(null);
+
+  // Build map: month -> memberId -> beerCount
+  const monthMap = {};
+  sessions.forEach(sess => {
+    if (!sess.date) return;
+    // date format: DD/MM/YYYY or YYYY-MM-DD
+    let month;
+    const d = sess.date;
+    if (/\d{2}\/\d{2}\/\d{4}/.test(d)) {
+      const parts = d.split("/");
+      month = `${parts[2]}-${parts[1]}`;
+    } else if (/\d{4}-\d{2}/.test(d)) {
+      month = d.substring(0,7);
+    } else {
+      month = d.substring(0,7);
+    }
+    if (!monthMap[month]) monthMap[month] = {};
+    sess.rounds.forEach(r => r.matches.forEach(m => {
+      if (m.score1===null||m.score2===null) return;
+      const s1=+m.score1,s2=+m.score2,w1=s1>s2,ace=isAce(s1,s2),mult=ace?2:1;
+      const losers = w1?m.team2:m.team1;
+      losers.forEach(p => {
+        if (!monthMap[month][p]) monthMap[month][p]=0;
+        monthMap[month][p]+=mult;
+      });
+    }));
+  });
+
+  const months = Object.keys(monthMap).sort().reverse();
+  if (months.length===0) return null;
+  const activeMonth = selMonth || months[0];
+  const data = monthMap[activeMonth] || {};
+  const sorted = members.map(m=>({...m,beers:data[m.id]||0})).filter(m=>m.beers>0).sort((a,b)=>b.beers-a.beers);
+  const total = sorted.reduce((a,x)=>a+x.beers,0);
+  const fmtMonth = (m) => { const [y,mo]=m.split("-"); return `Tháng ${+mo}/${y}`; };
+
+  return (
+    <div className="card" style={{marginBottom:12}}>
+      <div style={{fontWeight:900,color:"#f6c90e",fontSize:13,marginBottom:10}}>🍺 Đóng góp theo tháng</div>
+      {/* Month selector */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {months.map(m=>(
+          <button key={m} onClick={()=>setSelMonth(m)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${activeMonth===m?"#b7791f":"#2d3748"}`,background:activeMonth===m?"#2a1c00":"#131825",color:activeMonth===m?"#f6c90e":"#718096",fontSize:12,fontWeight:800,cursor:"pointer"}}>
+            {fmtMonth(m)}
+          </button>
+        ))}
+      </div>
+      {sorted.length===0 ? (
+        <div style={{textAlign:"center",color:"#4a5568",fontSize:13,padding:"12px 0"}}>Không có dữ liệu</div>
+      ) : (
+        <>
+          <div style={{marginBottom:10}}>
+            {sorted.map((m,i)=>{
+              const pct = total>0?Math.round(m.beers/total*100):0;
+              return (
+                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{width:22,fontSize:14,fontWeight:900,color:["#f6c90e","#c0c0c0","#cd7f32"][i]||"#4a5568",flexShrink:0}}>{["🥇","🥈","🥉"][i]||`${i+1}`}</div>
+                  <div style={{width:80,fontWeight:800,fontSize:13,flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name}</div>
+                  <div style={{flex:1,background:"#1a2535",borderRadius:4,height:10,overflow:"hidden"}}>
+                    <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#b7791f,#f6c90e)",borderRadius:4,transition:".3s"}}/>
+                  </div>
+                  <div style={{width:48,textAlign:"right",fontWeight:900,fontSize:13,color:"#f6c90e",flexShrink:0}}>{m.beers}🍺</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{borderTop:"1px solid #1e2535",paddingTop:8,display:"flex",justifyContent:"space-between",fontSize:12}}>
+            <span style={{color:"#4a5568",fontWeight:700}}>Tổng tháng {fmtMonth(activeMonth)}</span>
+            <span style={{fontWeight:900,color:"#f6c90e"}}>{total} chai 🍺</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── STANDINGS TAB ────────────────────────────────────────────────────────────
 function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
   const [detail, setDetail] = useState(null);
@@ -851,13 +935,14 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
               {round.sitters?.length>0&&<div style={{fontSize:11,color:"#4a5568"}}>Nghỉ: {round.sitters.map(gn).join(", ")}</div>}
             </div>
             {round.matches.map((m,mi)=>{
-              if(m.score1===null||m.score2===null) return (
+              if((m.score1===null||m.score2===null) && !editMode) return (
                 <div key={m.id} style={{padding:"8px 10px",background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,fontSize:12,color:"#4a5568",fontStyle:"italic"}}>
                   {m.team1.map(gn).join(" & ")} vs {m.team2.map(gn).join(" & ")} — Chưa có kết quả
                 </div>
               );
               return (
-                <div key={m.id} style={{background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,border:`1px solid ${editMode?"#2d4a6a":m.winner===1?"#1e3a27":"#3a1e1e"}`,overflow:"hidden"}}>
+                <div key={m.id} style={{background:"#0d1117",borderRadius:8,marginBottom:mi<round.matches.length-1?6:0,border:`1px solid ${editMode?"#2d4a6a":isAce(+m.score1,+m.score2)?"#b7791f":m.winner===1?"#1e3a27":"#3a1e1e"}`,overflow:"hidden"}}>
+                  {!editMode&&isAce(+m.score1,+m.score2)&&<div style={{textAlign:"center",padding:"3px 0",background:"linear-gradient(90deg,#7c4a00,#b7791f,#7c4a00)",fontSize:11,fontWeight:900,color:"#fefcbf"}}>🏅 ACE · 2🍺</div>}
                   <div style={{display:"flex",alignItems:"center",padding:"8px 10px"}}>
                     <div style={{flex:1}}>{m.team1.map(pid=>(<div key={pid} style={{fontSize:12,fontWeight:800,color:m.winner===1?"#68d391":"#fc8181"}}>{gn(pid)}</div>))}</div>
                     {(editMode || m.custom) ? (
@@ -946,6 +1031,8 @@ function StandingsTab({ members, sessions, isAdmin, save, showToast, db }) {
         <div style={{padding:"6px 14px 0",fontSize:11,color:"#4a5568"}}>Xếp theo: Điểm (W) → Tỉ lệ W/Tổng → Điểm ghi được</div>
       </div>
 
+      <MonthlyBeerStats members={members} sessions={sessions} />
+
       <div style={{fontSize:11,color:"#4a5568",fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>Lịch sử · bấm để xem chi tiết</div>
       {[...sessions].reverse().map(sess=>{
         const st = calcSession(members, sess.rounds);
@@ -1033,7 +1120,7 @@ function PersonalTab({ db, currentUser, save, showToast }) {
                   <span style={{fontSize:11,color:"#4a5568"}}>· Vòng {h.roundNum}</span>
                   {h.custom&&<span style={{fontSize:10,background:"#1a2a3a",color:"#90cdf4",padding:"1px 7px",borderRadius:5,fontWeight:700}}>Kèo tự chọn</span>}
                 </div>
-                <span style={{fontSize:12,fontWeight:900,color:h.won?"#68d391":"#fc8181",background:h.won?"#1a3a27":"#2a1418",padding:"2px 10px",borderRadius:6}}>{h.won?"🏆 THẮNG":"💸 THUA"}</span>
+                <span style={{fontSize:12,fontWeight:900,color:h.won?"#68d391":"#fc8181",background:h.won?"#1a3a27":"#2a1418",padding:"2px 10px",borderRadius:6}}>{h.won?"🏆 THẮNG":"💸 THUA"}{h.ace&&h.won?" 🏅 ACE":""}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{flex:1}}>
@@ -1051,7 +1138,7 @@ function PersonalTab({ db, currentUser, save, showToast }) {
                     <span style={{color:"#4a5568",margin:"0 4px"}}>–</span>
                     <span style={{color:h.won?"#fc8181":"#68d391"}}>{h.oppScore}</span>
                   </div>
-                  {!h.won&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3,marginTop:2}}><span style={{fontSize:11,color:"#9ae6b4",fontWeight:700}}>1🍺</span></div>}
+                  {!h.won&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3,marginTop:2}}><span style={{fontSize:11,color:"#9ae6b4",fontWeight:700}}>{h.ace?"2🍺":"1🍺"}</span></div>}
                 </div>
                 <div style={{flex:1,textAlign:"right"}}>
                   <div style={{fontSize:10,color:"#4a5568",fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Đối thủ</div>
